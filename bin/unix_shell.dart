@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
+import 'dart:math';
+
+import 'custom_process.dart';
 
 void main(List<String> arguments) async {
   UnixShellOutput unixShellOutput = UnixShellOutput();
@@ -20,6 +25,8 @@ void main(List<String> arguments) async {
 
 class UnixShellOutput {
   List<Process> currentJobs = [];
+  List<List<String>> commandHistory = [];
+  int upArrowCount = 0;
   void runShell() async {
     while (true) {
       stdout.write('my_shell>');
@@ -27,45 +34,103 @@ class UnixShellOutput {
       if (out != null && out.isNotEmpty) {
         final splitInput = out.split(' ');
 
-        switch (splitInput[0]) {
-          case 'pwd':
-            stdout.write(Process.runSync('pwd', []).stdout);
-          case 'exit':
-            break;
-          case 'echo':
-            stdout.writeln(splitInput.length == 2 ? splitInput[1] : '');
-          case 'clear': // TODO
-            Process.runSync('clear', []);
-          case 'ls':
-            stdout.writeln(Process.runSync(
-                    'ls', splitInput.length > 1 ? [splitInput[1]] : [])
-                .stdout);
-          case 'cat':
-            fileOperations(splitInput);
-          case 'mkdir':
-            directoryOperation(splitInput);
-          case 'rmdir':
-            directoryOperation(splitInput);
-          case 'rm':
-            fileOperations(splitInput);
-          case 'touch':
-            fileOperations(splitInput, shouldCheckExistence: false);
-          case 'kill':
-            final process = Process.runSync(
-                'kill', splitInput.length > 1 ? [splitInput[1]] : []);
-            stdout
-                .writeln(process.stdout.toString() + process.stderr.toString());
-          case 'jobs':
-            stdout.writeln(Process.runSync('jobs', []).stdout);
-          case 'sleep':
-            Process process = await Process.start('sleep', [splitInput[1]]);
-            currentJobs.add(process);
-          case 'fg':
-            stdout.addStream(currentJobs.first.stdout);
-            stderr.addStream(currentJobs.first.stderr);
-        }
+        await executeCommand(splitInput);
       }
     }
+  }
+
+  Future<void> executeCommand(List<String> splitInput) async {
+    switch (splitInput[0]) {
+      case '^[[A':
+        upArrowCount++;
+        if (commandHistory.length >= upArrowCount) {
+          final lastCommand =
+              commandHistory[commandHistory.length - upArrowCount];
+          stdout.writeln('my_shell> $lastCommand');
+          executeCommand(lastCommand);
+        }
+      case 'pwd':
+        stdout.write(Process.runSync('pwd', []).stdout);
+      case 'exit':
+        break;
+      case 'echo':
+        stdout.writeln(splitInput.length == 2 ? splitInput[1] : '');
+      case 'clear': // TODO
+        Process.runSync('clear', []);
+      case 'ls':
+        stdout.writeln(
+            Process.runSync('ls', splitInput.length > 1 ? [splitInput[1]] : [])
+                .stdout);
+      case 'cat':
+        fileOperations(splitInput);
+      case 'mkdir':
+        directoryOperation(splitInput);
+      case 'rmdir':
+        directoryOperation(splitInput);
+      case 'rm':
+        fileOperations(splitInput);
+      case 'touch':
+        fileOperations(splitInput, shouldCheckExistence: false);
+      case 'kill':
+        final process = Process.runSync(
+            'kill', splitInput.length > 1 ? [splitInput[1]] : []);
+        stdout.writeln(process.stdout.toString() + process.stderr.toString());
+      case 'jobs':
+        stdout.writeln(Process.runSync('jobs', []).stdout);
+      case 'sleep':
+        Process process = await Process.start('sleep', [splitInput[1]]);
+        currentJobs.add(process);
+      case 'fg':
+        stdout.addStream(currentJobs.first.stdout);
+        stderr.addStream(currentJobs.first.stderr);
+      case 'roundrobin':
+        if (splitInput.length <= 1) {
+          stdout.writeln(
+              'Please enter the number of processes ex. : >roundrobin 5');
+        } else {
+          int? count = int.tryParse(splitInput[1]);
+          if (count != null) {
+            await roundRobin(count);
+          } else {
+            stdout.writeln('Please enter a valid count');
+          }
+        }
+
+      default:
+        stdout.writeln('Please enter a valid command');
+    }
+  }
+
+  Future<void> priority(int processCount) async {}
+
+  Future<void> roundRobin(int processCount) async {
+    print('Round robin started...');
+    int currentTime = 0;
+    Queue<RoundRobinProcess> readyQueue = Queue();
+
+    for (int i = 0; i < processCount; i++) {
+      readyQueue.add(RoundRobinProcess(
+          pid: i + 1, timeSlice: 1, remainingTime: 3, burstTime: 3));
+    }
+    while (readyQueue.isNotEmpty) {
+      final process = readyQueue.removeFirst();
+      print('Process ${process.pid} started at $currentTime...');
+      final allowedToExecute = min(process.remainingTime, process.timeSlice);
+      process.startTime ??= currentTime;
+      await Future.delayed(Duration(seconds: allowedToExecute));
+      currentTime += allowedToExecute;
+      process.remainingTime -= allowedToExecute;
+      if (process.remainingTime <= 0) {
+        process.completionTime = currentTime;
+        process.turnaroundTime = process.completionTime! - process.arrivalTime;
+        process.waitingTime = process.turnaroundTime! - process.startTime!;
+        stdout.writeln(
+            'Process ${process.pid} completed with the following times: $process');
+      } else {
+        readyQueue.add(process);
+      }
+    }
+    stdout.writeln('All $processCount processes completed at $currentTime');
   }
 
   void memoryOperations(List<String> splitInput) {
