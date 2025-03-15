@@ -138,6 +138,7 @@ class UnixShellOutput {
       process.completionTime = currentTime;
       process.turnaroundTime = process.completionTime! - process.arrivalTime;
       process.waitingTime = process.turnaroundTime! - process.startTime!;
+      process.responseTime = process.startTime! - process.arrivalTime;
       stdout.writeln(
           'Process ${process.pid} completed with the following times: $process');
       if (!addedHighPriorityProcess) {
@@ -176,6 +177,7 @@ class UnixShellOutput {
         process.completionTime = currentTime;
         process.turnaroundTime = process.completionTime! - process.arrivalTime;
         process.waitingTime = process.turnaroundTime! - process.startTime!;
+        process.responseTime = process.startTime! - process.arrivalTime;
         stdout.writeln(
             'Process ${process.pid} completed with the following times: $process');
       } else {
