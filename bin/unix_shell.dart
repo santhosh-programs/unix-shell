@@ -3,6 +3,8 @@ import 'dart:collection';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:collection/collection.dart';
+
 import 'custom_process.dart';
 
 void main(List<String> arguments) async {
@@ -84,13 +86,26 @@ class UnixShellOutput {
         stdout.addStream(currentJobs.first.stdout);
         stderr.addStream(currentJobs.first.stderr);
       case 'roundrobin':
+        if (splitInput.length <= 2) {
+          stdout.writeln(
+              'Please enter all input ex. : >roundrobin [count] [timeslice]');
+        } else {
+          int? count = int.tryParse(splitInput[1]);
+          int? timeSlice = int.tryParse(splitInput[2]);
+          if (count != null && timeSlice != null) {
+            await roundRobin(count, timeSlice);
+          } else {
+            stdout.writeln('Please enter a valid count');
+          }
+        }
+      case 'priority':
         if (splitInput.length <= 1) {
           stdout.writeln(
-              'Please enter the number of processes ex. : >roundrobin 5');
+              'Please enter the number of processes ex. : >priority 5');
         } else {
           int? count = int.tryParse(splitInput[1]);
           if (count != null) {
-            await roundRobin(count);
+            await priority(count);
           } else {
             stdout.writeln('Please enter a valid count');
           }
@@ -101,16 +116,53 @@ class UnixShellOutput {
     }
   }
 
-  Future<void> priority(int processCount) async {}
+  Future<void> priority(int processCount) async {
+    int currentTime = 0;
+    PriorityQueue<PriorityProcess> priorityQueue = PriorityQueue((a, b) {
+      return a.priority != b.priority
+          ? b.priority.compareTo(a.priority)
+          : a.addSequence.compareTo(b.addSequence);
+    });
+    for (int i = 0; i < processCount; i++) {
+      priorityQueue.add(PriorityProcess(
+          pid: i + 1, priority: 1, burstTime: 3, addSequence: i));
+    }
+    bool addedHighPriorityProcess = false;
+    while (priorityQueue.isNotEmpty) {
+      final process = priorityQueue.removeFirst();
+      print('Process ${process.pid} with priority:${process.priority}'
+          ' started at $currentTime...');
+      process.startTime ??= currentTime;
+      await Future.delayed(Duration(seconds: process.burstTime));
+      currentTime += process.burstTime;
+      process.completionTime = currentTime;
+      process.turnaroundTime = process.completionTime! - process.arrivalTime;
+      process.waitingTime = process.turnaroundTime! - process.startTime!;
+      stdout.writeln(
+          'Process ${process.pid} completed with the following times: $process');
+      if (!addedHighPriorityProcess) {
+        print(
+            'Adding a high priority(priority: ${processCount + 1}) process with '
+            'pid: ${processCount + 1} inbetween');
+        priorityQueue.add(PriorityProcess(
+            priority: processCount + 1,
+            pid: processCount + 1,
+            burstTime: 3,
+            addSequence: processCount + 1));
+        addedHighPriorityProcess = true;
+      }
+    }
+    stdout.writeln('All $processCount processes completed at $currentTime');
+  }
 
-  Future<void> roundRobin(int processCount) async {
+  Future<void> roundRobin(int processCount, int timeSlice) async {
     print('Round robin started...');
     int currentTime = 0;
     Queue<RoundRobinProcess> readyQueue = Queue();
 
     for (int i = 0; i < processCount; i++) {
       readyQueue.add(RoundRobinProcess(
-          pid: i + 1, timeSlice: 1, remainingTime: 3, burstTime: 3));
+          pid: i + 1, timeSlice: timeSlice, remainingTime: 3, burstTime: 3));
     }
     while (readyQueue.isNotEmpty) {
       final process = readyQueue.removeFirst();

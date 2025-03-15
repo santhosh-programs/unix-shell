@@ -19,9 +19,13 @@ class RoundRobinProcess extends CustomProcess {
 
 class PriorityProcess extends CustomProcess {
   int priority;
+
+  /// Tracks the order of entry
+  int addSequence;
   PriorityProcess({
     required this.priority,
     required super.pid,
+    required this.addSequence,
     required super.burstTime,
   });
 
