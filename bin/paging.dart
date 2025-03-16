@@ -109,7 +109,8 @@ class Paging {
       return null;
     }
     if (pageInfo.physicalMemoryAddress == null) {
-      print('page fault occured, performing $replacementAlgo to free frame');
+      print(
+          'page fault occured for virtual page: $virtualPageId, performing $replacementAlgo to free frame');
       if (replacementAlgo == ReplacementAlgo.fifo) {
         return fifo(virtualPageId).processPid;
       } else {

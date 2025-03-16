@@ -134,11 +134,11 @@ class UnixShellOutput {
     for (int i = 0; i < 33; i++) {
       paging.startProcessAnyPage();
     }
-    int? pid = paging.startProcessAtSpecificPage(36);
+    int? pid = paging.startProcessAtSpecificPage(0);
     if (pid != null) {
       paging.completeProcess(pid);
     }
-    paging.startProcessAtSpecificPage(36);
+    paging.startProcessAtSpecificPage(0);
   }
 
   Future<void> priority(int processCount) async {
