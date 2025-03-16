@@ -7,6 +7,7 @@ import 'package:collection/collection.dart';
 
 import 'custom_process.dart';
 import 'paging.dart';
+import 'producer_consumer.dart';
 
 void main(List<String> arguments) async {
   UnixShellOutput unixShellOutput = UnixShellOutput();
@@ -23,7 +24,8 @@ void main(List<String> arguments) async {
   // int exitCode = await process.exitCode;
   // print('Process exited with code: $exitCode');
 
-  unixShellOutput.runShell();
+  // unixShellOutput.runShell();
+  // final pc = ProducerConsumer(arrayLength: 20);
 }
 
 class UnixShellOutput {
