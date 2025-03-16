@@ -23,12 +23,7 @@ void main(List<String> arguments) async {
   // int exitCode = await process.exitCode;
   // print('Process exited with code: $exitCode');
 
-  // unixShellOutput.runShell();
-  Paging paging = Paging(runningProcesses: {});
-  for (int i = 0; i < 33; i++) {
-    paging.startProcessAnyPage(ReplacementAlgo.lru);
-  }
-  paging.startProcessAtSpecificPage(36, ReplacementAlgo.lru);
+  unixShellOutput.runShell();
 }
 
 class UnixShellOutput {
@@ -42,12 +37,15 @@ class UnixShellOutput {
       if (out != null && out.isNotEmpty) {
         final splitInput = out.split(' ');
 
-        await executeCommand(splitInput);
+        int? exitCode = await executeCommand(splitInput);
+        if (exitCode != null) {
+          break;
+        }
       }
     }
   }
 
-  Future<void> executeCommand(List<String> splitInput) async {
+  Future<int?> executeCommand(List<String> splitInput) async {
     switch (splitInput[0]) {
       case '^[[A':
         upArrowCount++;
@@ -59,8 +57,8 @@ class UnixShellOutput {
         }
       case 'pwd':
         stdout.write(Process.runSync('pwd', []).stdout);
-      case 'exit':
-        break;
+      case 'q':
+        return -1;
       case 'echo':
         stdout.writeln(splitInput.length == 2 ? splitInput[1] : '');
       case 'clear': // TODO
@@ -116,10 +114,31 @@ class UnixShellOutput {
             stdout.writeln('Please enter a valid count');
           }
         }
-
+      case 'paging':
+        if (splitInput.length <= 1) {
+          stdout.writeln(
+              'please enter a valid entry, ex. paging fifo or paging lru');
+        } else {
+          paging(ReplacementAlgo.getValue(splitInput[1].toLowerCase()));
+        }
+        break;
       default:
         stdout.writeln('Please enter a valid command');
     }
+    return null;
+  }
+
+  void paging(ReplacementAlgo replacementAlgo) {
+    Paging paging =
+        Paging(runningProcesses: {}, replacementAlgo: replacementAlgo);
+    for (int i = 0; i < 33; i++) {
+      paging.startProcessAnyPage();
+    }
+    int? pid = paging.startProcessAtSpecificPage(36);
+    if (pid != null) {
+      paging.completeProcess(pid);
+    }
+    paging.startProcessAtSpecificPage(36);
   }
 
   Future<void> priority(int processCount) async {
