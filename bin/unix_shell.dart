@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:collection/collection.dart';
 
 import 'custom_process.dart';
+import 'paging.dart';
 
 void main(List<String> arguments) async {
   UnixShellOutput unixShellOutput = UnixShellOutput();
@@ -22,7 +23,12 @@ void main(List<String> arguments) async {
   // int exitCode = await process.exitCode;
   // print('Process exited with code: $exitCode');
 
-  unixShellOutput.runShell();
+  // unixShellOutput.runShell();
+  Paging paging = Paging(runningProcesses: {});
+  for (int i = 0; i < 33; i++) {
+    paging.startProcessAnyPage(ReplacementAlgo.lru);
+  }
+  paging.startProcessAtSpecificPage(36, ReplacementAlgo.lru);
 }
 
 class UnixShellOutput {

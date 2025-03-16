@@ -76,3 +76,12 @@ class CustomProcess {
         'waitingTime: $waitingTime';
   }
 }
+
+class PagingProcess extends CustomProcess {
+  int assignedVirtualPage;
+  PagingProcess({
+    required this.assignedVirtualPage,
+    required super.pid,
+    required super.burstTime,
+  });
+}
