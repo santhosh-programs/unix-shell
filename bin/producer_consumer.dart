@@ -2,28 +2,19 @@ import 'dart:async';
 import 'package:synchronized/synchronized.dart';
 
 void main() {
+  int counter = 0;
   final a = ProducerConsumer(arrayLength: 5);
-
-  Timer.periodic(Duration(milliseconds: 500), (timer) {
-    int item = DateTime.now().millisecondsSinceEpoch % 100; // Random item
-    a.produce(item);
-  });
-
-  Timer.periodic(Duration(seconds: 1), (timer) {
-    a.consume();
-  });
 }
 
 class ProducerConsumer {
   final int arrayLength;
   final Lock _lock = Lock();
-  Completer<void> _notFull =
-      Completer<void>(); // Completer to signal when space is available
+  Completer<void> _notFull = Completer<void>();
   late List<int?> sharedBuffer;
 
   ProducerConsumer({required this.arrayLength}) {
     sharedBuffer = [];
-    _notFull.complete(); // Initially, buffer is not full
+    _notFull.complete();
   }
 
   void produce(int value) async {

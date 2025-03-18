@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:collection/collection.dart';
 
 import 'custom_process.dart';
+import 'dining_philosopher.dart';
 import 'paging.dart';
 import 'producer_consumer.dart';
 
@@ -24,14 +25,12 @@ void main(List<String> arguments) async {
   // int exitCode = await process.exitCode;
   // print('Process exited with code: $exitCode');
 
-  // unixShellOutput.runShell();
+  unixShellOutput.runShell();
   // final pc = ProducerConsumer(arrayLength: 20);
 }
 
 class UnixShellOutput {
   List<Process> currentJobs = [];
-  List<List<String>> commandHistory = [];
-  int upArrowCount = 0;
   void runShell() async {
     while (true) {
       stdout.write('my_shell>');
@@ -49,22 +48,14 @@ class UnixShellOutput {
 
   Future<int?> executeCommand(List<String> splitInput) async {
     switch (splitInput[0]) {
-      case '^[[A':
-        upArrowCount++;
-        if (commandHistory.length >= upArrowCount) {
-          final lastCommand =
-              commandHistory[commandHistory.length - upArrowCount];
-          stdout.writeln('my_shell> $lastCommand');
-          executeCommand(lastCommand);
-        }
       case 'pwd':
         stdout.write(Process.runSync('pwd', []).stdout);
       case 'q':
         return -1;
       case 'echo':
         stdout.writeln(splitInput.length == 2 ? splitInput[1] : '');
-      case 'clear': // TODO
-        Process.runSync('clear', []);
+      case 'clear':
+        stdout.write('\x1B[2J\x1B[0;0H');
       case 'ls':
         stdout.writeln(
             Process.runSync('ls', splitInput.length > 1 ? [splitInput[1]] : [])
@@ -84,13 +75,51 @@ class UnixShellOutput {
             'kill', splitInput.length > 1 ? [splitInput[1]] : []);
         stdout.writeln(process.stdout.toString() + process.stderr.toString());
       case 'jobs':
-        stdout.writeln(Process.runSync('jobs', []).stdout);
+        stdout.writeln(currentJobs.map((e) => 'PID: ${e.pid} running'));
       case 'sleep':
-        Process process = await Process.start('sleep', [splitInput[1]]);
-        currentJobs.add(process);
+        if (splitInput.length < 2) {
+          stdout.writeln('please provide the duration as well');
+        } else {
+          if (splitInput.length == 3) {
+            if (splitInput[2] != '&') {
+              stdout.writeln('please provide a valid command');
+            } else {
+              Process process = await Process.start('sleep', [splitInput[1]]);
+              currentJobs.add(process);
+              stdout.writeln('Started process ${process.pid} in background.');
+            }
+          } else {
+            Process process = await Process.start('sleep', [splitInput[1]]);
+            await Future.wait([
+              stdout.addStream(process.stdout),
+              stderr.addStream(process.stderr)
+            ]);
+            int exitCode = await process.exitCode;
+            stdout.writeln('Process ${process.pid} exited with code $exitCode');
+          }
+        }
+        break;
       case 'fg':
-        stdout.addStream(currentJobs.first.stdout);
-        stderr.addStream(currentJobs.first.stderr);
+        if (currentJobs.isNotEmpty) {
+          Process process = currentJobs.removeAt(0);
+          stdout.writeln('Bringing process ${process.pid} to foreground...');
+          await Future.wait([
+            stdout.addStream(process.stdout),
+            stderr.addStream(process.stderr)
+          ]);
+          int exitCode = await process.exitCode;
+          stdout.writeln('Process ${process.pid} exited with code $exitCode');
+        } else {
+          stdout.writeln('No background jobs to bring to foreground.');
+        }
+        break;
+
+      // case 'sleep':
+      //   Process process = await Process.start('sleep', [splitInput[1]]);
+      //   currentJobs.add(process);
+      // case 'fg':
+      //   stdout.addStream(currentJobs.first.stdout);
+      //   stderr.addStream(currentJobs.first.stderr);
       case 'roundrobin':
         if (splitInput.length <= 2) {
           stdout.writeln(
@@ -124,10 +153,46 @@ class UnixShellOutput {
           paging(ReplacementAlgo.getValue(splitInput[1].toLowerCase()));
         }
         break;
+      case 'producerconsumer':
+        producerConsumer();
+      case 'dining':
       default:
         stdout.writeln('Please enter a valid command');
     }
     return null;
+  }
+
+  void diningPhilosopher() async {
+    List<Future<void>> philosophers = [];
+
+    for (int i = 0; i < NUM_PHILOSOPHERS; i++) {
+      philosophers.add(philosopher(i));
+    }
+
+    await Future.wait(philosophers);
+
+    print("All philosophers finished eating.");
+  }
+
+  void producerConsumer() {
+    int counter = 0;
+    ProducerConsumer pc = ProducerConsumer(arrayLength: 5);
+    Timer.periodic(Duration(milliseconds: 500), (timer) {
+      int item = DateTime.now().millisecondsSinceEpoch % 100; // Random item
+      pc.produce(item);
+      counter++;
+      if (counter >= 15) {
+        timer.cancel();
+      }
+    });
+
+    Timer.periodic(Duration(seconds: 1), (timer) {
+      counter++;
+      pc.consume();
+      if (counter >= 15) {
+        timer.cancel();
+      }
+    });
   }
 
   void paging(ReplacementAlgo replacementAlgo) {
