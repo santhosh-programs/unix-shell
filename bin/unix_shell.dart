@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
@@ -16,7 +17,7 @@ void main(List<String> arguments) async {
   //     await Process.start('sleep', ['100'], mode: ProcessStartMode.detached);
   // print('Started process with PID: ${process.pid}');
 
-  // Process process = await Process.start('sleep', ['5']);
+  // Process process = await Process.start('cat bin/unix_shell.dart', []);
   // print('Started process with PID: ${process.pid}');
 
   // // Bring it to the foreground (attach to stdout/stderr)
@@ -25,12 +26,62 @@ void main(List<String> arguments) async {
   // int exitCode = await process.exitCode;
   // print('Process exited with code: $exitCode');
 
-  unixShellOutput.runShell();
+  // unixShellOutput.runShell();
   // final pc = ProducerConsumer(arrayLength: 20);
+  // List<Process> s = [];
+  // List<List<String>> inputs = [
+  //   [
+  //     'cat',
+  //     '/Users/santhoshramachandran/Desktop/Cumberlands/operating_systems/unix_shell/bin/unix_shell.dart'
+  //   ],
+  //   ['grep dart'],
+  //   ['sort']
+  // ];
+  // for (var e in inputs) {
+  //   final proces = await Process.start(e.first, e.length > 1 ? [e[1]] : []);
+  //   if (s.isNotEmpty) {
+  //   s.removeAt(0).stdout.pipe(streamConsumer)
+  //     proces.stdin.addStream(.stdout);
+  //   }
+  //   s.add(proces);
+  // }
+  executePipeline([
+    'cat /Users/santhoshramachandran/Desktop/Cumberlands/operating_systems/unix_shell/bin/unix_shell.dart',
+    'grep dart',
+    'sort'
+  ]);
+}
+
+Future<void> executePipeline(List<String> commands) async {
+  Process? previousProcess;
+
+  for (var i = 0; i < commands.length; i++) {
+    var parts = commands[i].split(' ');
+    var process = await Process.start(parts.first, parts.skip(1).toList());
+
+    if (previousProcess != null) {
+      await previousProcess.stdout.pipe(process.stdin);
+      previousProcess.stderr.listen(stderr.add);
+    }
+
+    previousProcess = process;
+  }
+
+  if (previousProcess != null) {
+    final output = await previousProcess.stdout.transform(utf8.decoder).join();
+    print(output);
+    await stderr.addStream(previousProcess.stderr);
+    await previousProcess.exitCode;
+  }
 }
 
 class UnixShellOutput {
+  List<String> validCommands = [
+    'pwd',
+    'echo',
+  ];
   List<Process> currentJobs = [];
+
   void runShell() async {
     while (true) {
       stdout.write('my_shell>');
