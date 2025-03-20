@@ -27,78 +27,154 @@ void main(List<String> arguments) async {
   // print('Process exited with code: $exitCode');
 
   // unixShellOutput.runShell();
-  // final pc = ProducerConsumer(arrayLength: 20);
-  // List<Process> s = [];
-  // List<List<String>> inputs = [
-  //   [
-  //     'cat',
-  //     '/Users/santhoshramachandran/Desktop/Cumberlands/operating_systems/unix_shell/bin/unix_shell.dart'
-  //   ],
-  //   ['grep dart'],
-  //   ['sort']
-  // ];
-  // for (var e in inputs) {
-  //   final proces = await Process.start(e.first, e.length > 1 ? [e[1]] : []);
-  //   if (s.isNotEmpty) {
-  //   s.removeAt(0).stdout.pipe(streamConsumer)
-  //     proces.stdin.addStream(.stdout);
-  //   }
-  //   s.add(proces);
-  // }
-  executePipeline([
-    'cat /Users/santhoshramachandran/Desktop/Cumberlands/operating_systems/unix_shell/bin/unix_shell.dart',
-    'grep dart',
-    'sort'
-  ]);
+
+  // executePipeline([
+  //   'cat /Users/santhoshramachandran/Desktop/Cumberlands/operating_systems/unix_shell/bin/unix_shell.dart',
+  //   'grep dart',
+  //   'sort'
+  // ]);
+  unixShellOutput.authenticate();
+  // unixShellOutput.executePipeline(
+  //     'cat ./bin/unix_shell.dart | grep dart | sort'.split('|'));
 }
 
-Future<void> executePipeline(List<String> commands) async {
-  Process? previousProcess;
+enum FilePermission { read, write, execute }
 
-  for (var i = 0; i < commands.length; i++) {
-    var parts = commands[i].split(' ');
-    var process = await Process.start(parts.first, parts.skip(1).toList());
-
-    if (previousProcess != null) {
-      await previousProcess.stdout.pipe(process.stdin);
-      previousProcess.stderr.listen(stderr.add);
-    }
-
-    previousProcess = process;
-  }
-
-  if (previousProcess != null) {
-    final output = await previousProcess.stdout.transform(utf8.decoder).join();
-    print(output);
-    await stderr.addStream(previousProcess.stderr);
-    await previousProcess.exitCode;
-  }
+class User {
+  String pwd;
+  Set<FilePermission> role;
+  User({
+    required this.pwd,
+    required this.role,
+  });
 }
 
 class UnixShellOutput {
   List<String> validCommands = [
     'pwd',
     'echo',
+    'grep',
+    'ls',
+    'sort',
+    'cat',
+    'touch',
+    'rmdir',
+    'mkdir',
+    'rmdir',
   ];
+
+  final Map<String, Map<String, dynamic>> files = {
+    '/etc/config.txt': {
+      'owner': 'root',
+      'permissions': 'rw-',
+      'content': 'System Config'
+    },
+    '/home/user1/notes.txt': {
+      'owner': 'user1',
+      'permissions': 'rw-',
+      'content': 'Personal notes'
+    },
+    '/bin/script.sh': {
+      'owner': 'root',
+      'permissions': 'r-x',
+      'content': 'echo "Hello, World!"'
+    },
+  };
+
+  Map<String, User> users = {
+    'test1': User(pwd: 'test1', role: {FilePermission.read}),
+    'root':
+        User(pwd: 'root', role: {FilePermission.read, FilePermission.write}),
+  };
   List<Process> currentJobs = [];
+  User? currentUser;
+  void authenticate() {
+    String? username;
+    while (true) {
+      if (username == null) {
+        stdout.write('please enter username>');
+        String? out = stdin.readLineSync();
+        if (users.containsKey(out)) {
+          username = out;
+        } else {
+          stdout.writeln('please enter a valid username');
+          continue;
+        }
+      }
+      stdout.write('please enter password>');
+      String? out = stdin.readLineSync();
+      if (users[username]?.pwd == out) {
+        print('You have successfully logged into my_shell');
+        currentUser = users[username];
+        break;
+      } else {
+        stdout.writeln('please enter a valid password');
+      }
+    }
+    runShell();
+  }
 
   void runShell() async {
     while (true) {
       stdout.write('my_shell>');
       String? out = stdin.readLineSync();
       if (out != null && out.isNotEmpty) {
-        final splitInput = out.split(' ');
+        if (out.contains('|')) {
+          final commands = out.split('|');
+          await executePipeline(commands);
+        } else {
+          final splitInput = out.split(' ');
 
-        int? exitCode = await executeCommand(splitInput);
-        if (exitCode != null) {
-          break;
+          int? exitCode = await executeCommand(splitInput);
+          if (exitCode != null) {
+            break;
+          }
         }
       }
     }
   }
 
+  Future<void> executePipeline(List<String> commands) async {
+    Process? previousProcess;
+
+    for (var i = 0; i < commands.length; i++) {
+      var parts = commands[i].trim().split(' ');
+      if (!validCommands.contains(parts[0])) {
+        print('please provide valid commands. ${parts[0]} is invalid');
+        previousProcess?.kill();
+        return;
+      }
+      var process = await Process.start(parts.first, parts.skip(1).toList());
+
+      if (previousProcess != null) {
+        await previousProcess.stdout.pipe(process.stdin);
+        previousProcess.stderr.listen(stderr.add);
+      }
+
+      previousProcess = process;
+    }
+
+    if (previousProcess != null) {
+      final output =
+          await previousProcess.stdout.transform(utf8.decoder).join();
+      print(output);
+      await stderr.addStream(previousProcess.stderr);
+      await previousProcess.exitCode;
+    }
+  }
+
   Future<int?> executeCommand(List<String> splitInput) async {
     switch (splitInput[0]) {
+      case 'write':
+        if (currentUser?.role.contains(FilePermission.write) == true) {
+          final path = splitInput[1];
+          final text = splitInput[2];
+          File file = File(path);
+          file.writeAsStringSync(text, mode: FileMode.append);
+        } else {
+          print('you dont have access to write');
+        }
+        break;
       case 'pwd':
         stdout.write(Process.runSync('pwd', []).stdout);
       case 'q':
