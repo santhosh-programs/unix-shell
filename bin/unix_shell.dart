@@ -279,13 +279,6 @@ class UnixShellOutput {
           stdout.writeln('No background jobs to bring to foreground.');
         }
         break;
-
-      // case 'sleep':
-      //   Process process = await Process.start('sleep', [splitInput[1]]);
-      //   currentJobs.add(process);
-      // case 'fg':
-      //   stdout.addStream(currentJobs.first.stdout);
-      //   stderr.addStream(currentJobs.first.stderr);
       case 'roundrobin':
         if (splitInput.length <= 2) {
           stdout.writeln(

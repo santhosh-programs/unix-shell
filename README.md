@@ -8,5 +8,10 @@ For paging:
 For scheduling
 ```<roundrobin or paging> <count> <only for RR: timeslice>```
 
-For 
+For running the mutex and semaphores simulation:
+run ```dining``` or ```producerconsumer```
+
+Jobs Foregroud and Background
+run ```sleep 10``` to start a foreground job, you can start the same job in the backgroud by running ```sleep 10 &```
+If ran on the BG, run ```fg``` to bring it to the foreground or run ```jobs``` to see the running jobs
 
