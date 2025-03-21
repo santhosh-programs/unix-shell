@@ -40,9 +40,35 @@ void main(List<String> arguments) async {
 
 enum FilePermission { read, write, execute }
 
+enum Role { admin, user }
+
+Map<String, Map<Role, Set>> filePermissions = {
+  './bin/testing.txt': {
+    Role.admin: {
+      FilePermission.read,
+      FilePermission.write,
+      FilePermission.execute
+    },
+    Role.user: {
+      // FilePermission.read,
+    },
+  },
+  './bin/testing2.txt': {
+    Role.admin: {
+      FilePermission.read,
+      FilePermission.write,
+      FilePermission.execute
+    },
+    Role.user: {
+      FilePermission.read,
+      FilePermission.write,
+    },
+  }
+};
+
 class User {
   String pwd;
-  Set<FilePermission> role;
+  Role role;
   User({
     required this.pwd,
     required this.role,
@@ -63,32 +89,13 @@ class UnixShellOutput {
     'rmdir',
   ];
 
-  final Map<String, Map<String, dynamic>> files = {
-    '/etc/config.txt': {
-      'owner': 'root',
-      'permissions': 'rw-',
-      'content': 'System Config'
-    },
-    '/home/user1/notes.txt': {
-      'owner': 'user1',
-      'permissions': 'rw-',
-      'content': 'Personal notes'
-    },
-    '/bin/script.sh': {
-      'owner': 'root',
-      'permissions': 'r-x',
-      'content': 'echo "Hello, World!"'
-    },
-  };
-
   Map<String, User> users = {
-    'test1': User(pwd: 'test1', role: {FilePermission.read}),
-    'root':
-        User(pwd: 'root', role: {FilePermission.read, FilePermission.write}),
+    'test1': User(pwd: 'test1', role: Role.user),
+    'root': User(pwd: 'root', role: Role.admin),
   };
   List<Process> currentJobs = [];
   User? currentUser;
-  void authenticate() {
+  void authenticate() async {
     String? username;
     while (true) {
       if (username == null) {
@@ -111,10 +118,13 @@ class UnixShellOutput {
         stdout.writeln('please enter a valid password');
       }
     }
-    runShell();
+    int? exitCode = await runShell();
+    if (exitCode != null) {
+      authenticate();
+    }
   }
 
-  void runShell() async {
+  Future<int?> runShell() async {
     while (true) {
       stdout.write('my_shell>');
       String? out = stdin.readLineSync();
@@ -126,8 +136,11 @@ class UnixShellOutput {
           final splitInput = out.split(' ');
 
           int? exitCode = await executeCommand(splitInput);
-          if (exitCode != null) {
-            break;
+          if (exitCode == -1) {
+            return null;
+          } else if (exitCode == 1) {
+            /// logging out of shell
+            return exitCode;
           }
         }
       }
@@ -165,9 +178,22 @@ class UnixShellOutput {
 
   Future<int?> executeCommand(List<String> splitInput) async {
     switch (splitInput[0]) {
+      case 'logout':
+        print('logging out current user');
+        return 1;
       case 'write':
-        if (currentUser?.role.contains(FilePermission.write) == true) {
-          final path = splitInput[1];
+        if (splitInput.length < 3) {
+          print('please enter write <path> <text>');
+          return null;
+        }
+        final path = splitInput[1];
+        final permission = filePermissions[path];
+        if (permission == null) {
+          print(
+              'please provide a valid file to write to ex. ./bin/testing.txt');
+          return null;
+        }
+        if (permission[currentUser!.role]!.contains(FilePermission.write)) {
           final text = splitInput[2];
           File file = File(path);
           file.writeAsStringSync(text, mode: FileMode.append);
@@ -188,7 +214,20 @@ class UnixShellOutput {
             Process.runSync('ls', splitInput.length > 1 ? [splitInput[1]] : [])
                 .stdout);
       case 'cat':
-        fileOperations(splitInput);
+        if (splitInput.length > 2) {
+          stdout.writeln('Please provide the entire path inside double quotes');
+        } else if (splitInput.length == 1) {
+          stdout.writeln('Please provide the file path');
+        } else {
+          final path = filePermissions[splitInput[1]];
+          if (path != null) {
+            if (!path[currentUser!.role]!.contains(FilePermission.read)) {
+              print('you do not have access to read the file');
+              return null;
+            }
+          }
+          fileOperations(splitInput);
+        }
       case 'mkdir':
         directoryOperation(splitInput);
       case 'rmdir':
